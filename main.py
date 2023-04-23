@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader
+from sklearn.preprocessing import StandardScaler
 from torchvision import datasets
 from torchvision.transforms import ToTensor
 import matplotlib.pyplot as plt
@@ -16,6 +17,11 @@ batch_size = 64
 data = pd.read_csv("smoking.csv")
 data = data.drop(["ID", "oral"], axis=1)
 data = pd.get_dummies(data, drop_first=True)
+
+scaler = StandardScaler()
+scaled = scaler.fit_transform(data)
+data = pd.DataFrame(scaled, columns=data.columns)
+
 training_data, test_data = train_test_split(data, test_size=0.2)
 training_data = training_data.reset_index(drop=True)
 test_data = test_data.reset_index(drop=True)
@@ -25,6 +31,7 @@ class SmokeDataset(Dataset):
         self.data = dataset
         self.labels = self.data[label]
         self.data = self.data.drop([label], axis = 1)
+        self.data = self.data
 
 
     def __len__(self):
