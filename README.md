@@ -4,27 +4,31 @@
 
 ### Regression task
 
-Regress age on the rest of the variables
+Regress height on the weight of those age 20
 
 - Linear Regression
 
 ### Classification task
 
 - LDA
+
 - Logistic Regression
+
 - SVM with linear kernel
 
 ## Nonlinear Methods
 
 ### Regression Task
 
-- Kernel Smoothing
+- Spline bases regression
 
 ### Classification Task
 
 - Decision Tree
 
 - Random Forest
+
+- Boosting
 
 - Neural Network
 
