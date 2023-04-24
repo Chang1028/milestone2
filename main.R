@@ -8,6 +8,9 @@ library(pROC)
 # Packages for Random Forest
 library(randomForest)
 
+# Packages for Boosting
+library(JOUSBoost)
+
 # Packages for gbm
 library(rsample)      # data splitting 
 library(gbm)          # basic implementation
@@ -122,7 +125,7 @@ pred.rf <- predict(fit.rf, newdata = data.test, type = 'class')
 mean(pred.rf == data.test$smoking)
 # Draw the ROC curve and calculate AUC
 pred.rf.prob = predict(fit.rf, newdata = data.test, type = 'prob')
-roc(data.test$smoking, pre.rf.numeric[,1])
+roc(data.test$smoking, pred.rf.prob[,1])
 # Draw the variable importance plot
 varImpPlot(fit.rf)
 hist(fit.rf$oob.times)
@@ -130,9 +133,21 @@ plot(fit.rf)
 
 
 ## -----------Boosting------------------
+Y<-as.numeric(data.train[,25])*2-3
+ans<-(as.numeric(data.test[,25])-1)*2-1
+n.trees<-c(2,10,50,100,500,1000)
+accuracy<-rep(0,6)
+for(i in 1:6){
+  aba<-adaboost(X=as.matrix(data.train[,-25],ncol=24),y=Y,tree_depth=2,n.trees[i])
+  pred<-predict(aba,as.matrix(data.test[,-25]))
+  accuracy[i]<-sum(pred==ans)/nrow(data.test)
+}
+plot(x=n.trees,accuracy,main="Accuracy of Ababoost",type="l",xlab="Number of Trees",ylab="Accuracy",lwd=1.5)
+#The accuracy converges to 0.7585959
 
 
 ## ----------Linear Regression------------
+library(dplyr)
 data <- read.csv("smoking.csv")
 # Delete "ID" and "oral" columns
 data <- data[,-c(1,24)]
@@ -141,58 +156,49 @@ data$gender = as.numeric(factor(data$gender,levels = c('F','M'), labels = c(0,1)
 data$tartar = as.numeric(factor(data$tartar,levels = c('Y','N'), labels = c(0,1)))
 data$smoking = factor(data$smoking)
 colnames(data)[c(3,4)] <- c("height", "weight")
-# scale the other variables
-#data[,-c(1,24,25)] = apply(data[,-c(1,24,25)], 2, scale)
+data %>% distinct(gender, age, height, weight, smoking, .keep_all = TRUE)
+# scale the other variables (We do not scale the data here!!)
+# data[,-c(1,24,25)] = apply(data[,-c(1,24,25)], 2, scale)
 # Split the data into training and test sets
 m <- nrow(data)
 set.seed(2023)
 index <- sample(m, floor(0.8*m))
 data.train <- data[index,]
 data.test <- data[-index,]
-
-index.lm <- sample(m, 10000)
-data.lm <- data[index.lm, ]
-lm.fit <- lm(HDL~weight, data = data.lm)
-summary(lm.fit)
-pred.lm <- predict(lm.fit, data.lm)
-df <- data.frame(x = data.lm$weight, y1 = data.lm$HDL, y2 = pred.lm)
+# We want to regress height on weight for those smoke and age 40
+data.twenty <- data[(data$smoking==1)&(data$age==40)&(data$gender==2),]
+lm.fit <- lm(log(height)~weight, data = data.twenty)
+coef(lm.fit)
+pred.twenty <- exp(predict(lm.fit, data.twenty))
+df <- data.frame(x = data.twenty$weight, y1 = data.twenty$height, y2 = pred.twenty)
 ggplot()+
   geom_point(data = df, mapping = aes(x = x, y = y1))+
   geom_point(data = df, mapping = aes(x = x, y = y2), color = "red", size = 1)
 
 
-## ----------Kernel Smoothing-------------
+# We want to regress height on weight for those don't smoke and age 40
+data.twenty <- data[(data$smoking==0)&(data$age==40)&(data$gender==2),]
+lm.fit <- lm(log(height)~weight, data = data.twenty)
+coef(lm.fit)
+pred.twenty <- exp(predict(lm.fit, data.twenty))
+df <- data.frame(x = data.twenty$weight, y1 = data.twenty$height, y2 = pred.twenty)
+ggplot()+
+  geom_point(data = df, mapping = aes(x = x, y = y1))+
+  geom_point(data = df, mapping = aes(x = x, y = y2), color = "red", size = 1)
+
+
+## ----------Spline Bases-------------
 library(splines2)
 library(tidyr)
-fit.spline <- lm(HDL ~ 0 + bSpline(weight, knots = quantile(weight, c(0.25, 0.5, 0.75)), degree = 3, intercept = T), data = data.lm)
-x <- seq(30, 140, by = 1)
+fit.spline <- lm(height ~ 0 + bSpline(weight, knots = quantile(weight, c(0.25, 0.5, 0.75)), degree = 3, intercept = T), data = data.twenty)
+x <- seq(45, 120, by = 1)
 x <- data.frame(weight = x)
 y.spline <- predict(fit.spline, x)
 spline.curve <- data.frame(x, y.spline)
 ggplot()+
-  geom_point(data = data.lm, mapping = aes(x = weight, y = HDL))+
-  geom_point(data = spline.curve, mapping = aes(x = weight, y = y.spline), color = "red", size = 0.5)
+  geom_point(data = data.twenty, mapping = aes(x = weight, y = height))+
+  geom_line(data = spline.curve, mapping = aes(x = weight, y = y.spline), color = "red", size = 0.5)
 
-## ----------Group Mean----------------
-data.mean <- aggregate(data$HDL, by=list(weight=data$weight), FUN=median)
-fit.lm <- lm(x~weight, data = data.mean)
-pred.lm <- predict(fit.lm, data.mean)
-data.mean <- cbind(data.mean, pred.lm)
-ggplot(data = data.mean)+
-  geom_point(mapping = aes(x = weight, y = x))+
-  geom_point(mapping = aes(x = weight, y = pred.lm), color = "red", size = 1)
-
-
-library(splines2)
-library(tidyr)
-fit.spline <- lm(HDL ~ 0 + bSpline(weight, knots = quantile(weight, c(0.25, 0.5, 0.75)), degree = 3, intercept = T), data = data.lm)
-x <- seq(30, 140, by = 1)
-x <- data.frame(weight = x)
-y.spline <- predict(fit.spline, x)
-spline.curve <- data.frame(x, y.spline)
-ggplot()+
-  geom_point(data = data.lm, mapping = aes(x = weight, y = HDL))+
-  geom_point(data = spline.curve, mapping = aes(x = weight, y = y.spline), color = "red", size = 0.5)
 
 
 
