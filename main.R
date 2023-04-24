@@ -114,7 +114,7 @@ auc(r)
 plot(r)
 
 
-### ----------- Random Forest ------------
+### -----------Random Forest------------
 # fit the Random Forest model
 fit.rf <- randomForest(smoking~., data = data.train)
 pred.rf <- predict(fit.rf, newdata = data.test, type = 'class')
@@ -127,5 +127,76 @@ roc(data.test$smoking, pre.rf.numeric[,1])
 varImpPlot(fit.rf)
 hist(fit.rf$oob.times)
 plot(fit.rf)
+
+
+## -----------Boosting------------------
+
+
+## ----------Linear Regression------------
+data <- read.csv("smoking.csv")
+# Delete "ID" and "oral" columns
+data <- data[,-c(1,24)]
+# Convert "gender" and "tartar" to 0-1 dummy variables
+data$gender = as.numeric(factor(data$gender,levels = c('F','M'), labels = c(0,1)))
+data$tartar = as.numeric(factor(data$tartar,levels = c('Y','N'), labels = c(0,1)))
+data$smoking = factor(data$smoking)
+colnames(data)[c(3,4)] <- c("height", "weight")
+# scale the other variables
+#data[,-c(1,24,25)] = apply(data[,-c(1,24,25)], 2, scale)
+# Split the data into training and test sets
+m <- nrow(data)
+set.seed(2023)
+index <- sample(m, floor(0.8*m))
+data.train <- data[index,]
+data.test <- data[-index,]
+
+index.lm <- sample(m, 10000)
+data.lm <- data[index.lm, ]
+lm.fit <- lm(HDL~weight, data = data.lm)
+summary(lm.fit)
+pred.lm <- predict(lm.fit, data.lm)
+df <- data.frame(x = data.lm$weight, y1 = data.lm$HDL, y2 = pred.lm)
+ggplot()+
+  geom_point(data = df, mapping = aes(x = x, y = y1))+
+  geom_point(data = df, mapping = aes(x = x, y = y2), color = "red", size = 1)
+
+
+## ----------Kernel Smoothing-------------
+library(splines2)
+library(tidyr)
+fit.spline <- lm(HDL ~ 0 + bSpline(weight, knots = quantile(weight, c(0.25, 0.5, 0.75)), degree = 3, intercept = T), data = data.lm)
+x <- seq(30, 140, by = 1)
+x <- data.frame(weight = x)
+y.spline <- predict(fit.spline, x)
+spline.curve <- data.frame(x, y.spline)
+ggplot()+
+  geom_point(data = data.lm, mapping = aes(x = weight, y = HDL))+
+  geom_point(data = spline.curve, mapping = aes(x = weight, y = y.spline), color = "red", size = 0.5)
+
+## ----------Group Mean----------------
+data.mean <- aggregate(data$HDL, by=list(weight=data$weight), FUN=median)
+fit.lm <- lm(x~weight, data = data.mean)
+pred.lm <- predict(fit.lm, data.mean)
+data.mean <- cbind(data.mean, pred.lm)
+ggplot(data = data.mean)+
+  geom_point(mapping = aes(x = weight, y = x))+
+  geom_point(mapping = aes(x = weight, y = pred.lm), color = "red", size = 1)
+
+
+library(splines2)
+library(tidyr)
+fit.spline <- lm(HDL ~ 0 + bSpline(weight, knots = quantile(weight, c(0.25, 0.5, 0.75)), degree = 3, intercept = T), data = data.lm)
+x <- seq(30, 140, by = 1)
+x <- data.frame(weight = x)
+y.spline <- predict(fit.spline, x)
+spline.curve <- data.frame(x, y.spline)
+ggplot()+
+  geom_point(data = data.lm, mapping = aes(x = weight, y = HDL))+
+  geom_point(data = spline.curve, mapping = aes(x = weight, y = y.spline), color = "red", size = 0.5)
+
+
+
+
+
 
 
